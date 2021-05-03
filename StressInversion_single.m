@@ -1,0 +1,71 @@
+clear all
+close all
+
+
+%% Read in stress data
+load StressData 
+%%% for ascii files: StressData=load('NameOfStressDataAscii.filetype')
+%%% example/ StressData=load('EasternTennesseeFocalMechanisms.txt');
+Locations=StressData(:,1:2);
+strike=StressData(:,3);
+dip=StressData(:,4);
+rake=StressData(:,5);
+
+%%% Here, we use an example file from Eastern Tennessee, United States.
+%%% There are 59 focal mechanisms (Chapman et al., 1997 BSSA and Powell,
+%%% 2017 written communication after Cooley, 2014 MS Thesis).
+%%% The file StressData is [Longitude Latitude Strike Dip Rake]. The 
+%%% strike, dip, and rake can be either of the nodal planes.
+
+num_obs=length(StressData);
+
+name='Eastern Tennessee';
+a=find(name~=' ');
+plot_file      = ['./' name(a) ];
+
+
+%% Set a few parameters related to the inversions and iterations
+N_noise_realizations = 100; %%% how many inversions to run (for uncertainties)
+mean_deviation =15; %%% in each inversion, there is noise added to the mechanisms
+friction_mean=0.65; %%% friction matters for stability factor, which is used to select focal plane
+friction_spread=0.7; %%% friction is sampled from a uniform distribution about the stated mean
+        
+N_realizations = 6; %%% the inversion generates a stacked estimate of the stress tensor with randomly selected focal planes
+N_iterations = 6; %%% the inversion then iterates for focal plane selection
+
+%% Inversions can be weighted by distance from a point. 
+loc=mean(Locations,1); %%% Otherwise, a dummy variable.
+%%% If you want to do distance-weighting, see the variable "D" in
+%%% jackknife_StressInversion
+
+%% Run n=N_noise_realizations inversions
+ jackknife_StressInversion 
+
+%% Tabulate results
+%%% Aphi taken from Simpson (1997, JGR). Requires faulting style and stress
+%%% ratio. Aphi 0-->3 radial extension --> radial shortening
+            aphi=(STYLE+0.5)+(-1).^STYLE.*(shape_ratio_statistics-0.5);
+            A_phi=median(aphi);
+            A_phi_low=quantile(aphi,0.16); % -1 sd
+            A_phi_high=quantile(aphi,0.84); % +1 sd
+            A_phi_low2=quantile(aphi,0.05); % ~-2 sd
+            A_phi_high2=quantile(aphi,0.95); % ~+2 sd
+            Aphi_uncert=(A_phi_high-A_phi_low)/2;
+
+            SHMAX_all=mod(SHMAX_all,180); 
+           for adjust=1:5
+             SHmax=median(SHMAX_all);
+             foo=find(SHMAX_all>SHmax+90); SHMAX_all(foo)=SHMAX_all(foo)-180;
+             foo=find(SHMAX_all<SHmax-90); SHMAX_all(foo)=SHMAX_all(foo)+180;
+             SHMAX_all(SHMAX_all>360)=SHMAX_all(SHMAX_all>360)-360;
+              SHmax=median(SHMAX_all);
+           end
+            
+            SHmax_max=quantile(SHMAX_all,0.84);
+            SHmax_min=quantile(SHMAX_all,0.16);
+            SHmax_max2=quantile(SHMAX_all,0.95);
+            SHmax_min2=quantile(SHMAX_all,0.05);
+            SH_uncert=(SHmax_max-SHmax_min)/2;
+            
+%% Plot 
+StressStereonet
